@@ -1,0 +1,96 @@
+#+title: DocSnap
+#+author: Afif Katrib
+#+description: The MVP will enable users to upload photos of invoices or receipts, extract key information such as transaction dates, names, and costs, and organize these documents in a user-friendly directory. Additionally, users can manually edit or input details for each document, and the application will display the extracted data in a spreadsheet format. The goal is to create a simple yet functional foundation that can be expanded upon in future development stages.
+#+setupfile: texformat.org
+#+LATEX_HEADER: \usepackage[margin=0.5in]{geometry}
+#+LATEX_HEADER: \renewcommand{\maketitle}{\begin{center}{\huge\bfseries DocSnap}\\ \vspace{1em} Afif Katrib \end{center}}
+#+OPTIONS: toc:nil
+#+OPTIONS: ^:nil
+
+* Introcduction
+This project is designed to automatically read and extract information from a picture of a receipt. It uses advanced artificial intelligence to identify and pull out the names and prices of items listed on the receipt. The extracted information is then saved into a spreadsheet file (CSV format) for easy viewing and analysis. This can be useful for keeping track of expenses or organizing purchase data.
+
+* Program
+
+** Import libraries
+The following libraries are required:
+- os: A way to interact with the OS.
+- csv: Functionality to read and write csv files.
+- dotenv: Loads environment variables from a .env file.
+- transformers: To interact with LLMs.
+- re: support for regular expressions.
+ 
+#+begin_src python
+import os
+import csv
+from dotenv import load_dotenv
+from transformers import pipeline
+import re
+load_dotenv()
+#+end_src
+
+** Functions to Process Images
+Method of extracting text:
+
+1. The img2text function extracts text from the image using the AdamCodd/donut-receipts-extract model.
+2. The parse_items function uses a regular expression to find item names and prices in the extracted text.
+3. The save_to_csv function writes the parsed items into a CSV file.
+
+#+begin_src python
+def img2text(url):
+    image_to_text = pipeline("image-to-text", model="AdamCodd/donut-receipts-extract")
+    text = image_to_text(url)[0]["generated_text"]
+    return text
+
+def parse_items(text):
+    item_pattern = re.compile(r'<s_item_name>(.*?)</s_item_name>.*?<s_item_value>(.*?)</s_item_value>', re.DOTALL)
+    items = item_pattern.findall(text)
+    return items
+
+def save_to_csv(items, filename):
+    with open(filename, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Item Name', 'Item Price'])
+        writer.writerows(items)
+#+end_src
+
+** Executing the program
+All that's left is to carry out the functions:
+
+#+begin_src python
+extracted_text = img2text("inv.jpeg")
+items = parse_items(extracted_text)
+csv_filename = os.path.join(os.getcwd(), "extracted_items.csv")
+save_to_csv(items, csv_filename)
+
+print(f"Items have been saved to {csv_filename}")
+#+end_src
+
+* Test Results
+
+** Swiss Small Business Receipt
+
+[[test images/ReceiptSwiss.jpg]]
+
+A Sample from a random small business to test the AI's ability.
+
+*** Results:
+#+begin_example csv
+Item Name,Item Price
+ 2xLatte Macchiato, 9.00
+ 1xGloki, 5.00
+ 1xSchweinschnitzel, 22.00
+ 1xChässpätzli, 18.50
+#+end_example
+
+** Walmart Receipt
+
+[[test images/receipt.jpeg]]
+
+Receipt from a large company.
+
+*** Results:
+#+begin_example
+Item Name,Item Price
+ MOTOR OIL 007310200289, 21.97
+#+end_example
