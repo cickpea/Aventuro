@@ -25,17 +25,24 @@ def save_to_csv(items, filename):
         writer.writerow(['Item Name', 'Item Price'])
         writer.writerows(items)
 
-def process_image(image):
-    if isinstance(image, np.ndarray):
+def process_image(upload_image, webcam_image):
+    # Debugging statements to verify inputs
+    print(f"Upload Image: {upload_image}")
+    print(f"Webcam Image: {webcam_image}")
+
+    # Determine which image is provided
+    if upload_image is not None:
+        image_path = upload_image
+    elif webcam_image is not None:
         # Convert NumPy array to PIL Image
-        pil_image = Image.fromarray(image)
+        pil_image = Image.fromarray(webcam_image)
         # Save the image to a temporary file
         temp_image_path = os.path.join(os.getcwd(), "temp_image.png")
         pil_image.save(temp_image_path)
+        print(f"Image saved to {temp_image_path}")  # Debugging statement
         image_path = temp_image_path
     else:
-        # Assume the image is already a file path
-        image_path = image
+        raise ValueError("No image provided")
 
     extracted_text = img2text(image_path)
     items = parse_items(extracted_text)
@@ -51,7 +58,7 @@ def process_image(image):
 # Create Gradio interface
 iface = gr.Interface(
     fn=process_image,
-    inputs=gr.Image(mirror_webcam=False , type="numpy"),
+    inputs=gr.Image(sources=["upload"], type="filepath"),
     outputs=["text", "file"]
 )
 
