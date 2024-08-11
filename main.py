@@ -1,60 +1,65 @@
-# Import Libraries
-import streamlit as st
-from streamlit_chat import message
+import gradio as gr
 import os
-from PIL import Image
-import requests
-import google.generativeai as genai
+import csv
 from dotenv import load_dotenv
-load_dotenv()
- 
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-## function to load Gemini Pro model and get response
-model= genai.GenerativeModel("gemini-1.5-flash")
- 
-#TODO: Add history funcionality
-def get_gemini_response(question, history):
-    chat = model.start_chat(history=[])
-    response=chat.send_message(question)
-    for chunk in response:
-        output = chunk.text
-    # return response.choices[0].text.strip()
- 
-#TODO: Add functionality to submit images.
-def on_Submit():
-    user_input = st.session_state.user_input
-    output = get_gemini_response(user_input, st.session_state['past'])
-    st.session_state['past'].append(user_input)
-    st.session_state['generated'].append(output)
- 
-    st.session_state.user_input = ''
- 
-def on_Clear():
-    del st.session_state.past[:]
-    del st.session_state.generated[:]
- 
- 
-if __name__ == '__main__':
-    if 'generated' not in st.session_state:
-        st.session_state['generated'] = ["Hello ! Ask me anything 🤗"]
-    if 'past' not in st.session_state:
-        st.session_state['past'] = ["Hey ! 👋"]
- 
-    st.title("ChatBot")
-    response_container = st.empty()
- 
- 
-    # container for the chat history
-    response_container = st.container()
-    with response_container:
-        for i in range(len(st.session_state['generated'])):
-            message(st.session_state["past"][i], is_user=True, key=str(i) + '_user', avatar_style="big-smile")
-            message(st.session_state["generated"][i], key=str(i), avatar_style="thumbs")
- 
-    # container for the user's text input
-    user_container = st.container()
-    with user_container:
-        st.button("Clear message", on_click=on_Clear)
-        df = st.file_uploader(label = 'Upload File')
-        st.text_input('User Input:', key='user_input', on_change=on_Submit)
- 
+from transformers import pipeline
+import re
+import torch
+from PIL import Image
+import numpy as np
+
+def img2text(url):
+    device = 0 if torch.cuda.is_available() else -1
+    image_to_text = pipeline("image-to-text", model="AdamCodd/donut-receipts-extract", device=device)
+    text = image_to_text(url)[0]["generated_text"]
+    return text
+
+def parse_items(text):
+    item_pattern = re.compile(r'<s_item_name>(.*?)</s_item_name>.*?<s_item_value>(.*?)</s_item_value>', re.DOTALL)
+    items = item_pattern.findall(text)
+    return items
+
+def save_to_csv(items, filename):
+    with open(filename, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Item Name', 'Item Price'])
+        writer.writerows(items)
+
+def process_image(upload_image, webcam_image):
+    # Debugging statements to verify inputs
+    print(f"Upload Image: {upload_image}")
+    print(f"Webcam Image: {webcam_image}")
+
+    # Determine which image is provided
+    if upload_image is not None:
+        image_path = upload_image
+    elif webcam_image is not None:
+        # Convert NumPy array to PIL Image
+        pil_image = Image.fromarray(webcam_image)
+        # Save the image to a temporary file
+        temp_image_path = os.path.join(os.getcwd(), "temp_image.png")
+        pil_image.save(temp_image_path)
+        print(f"Image saved to {temp_image_path}")  # Debugging statement
+        image_path = temp_image_path
+    else:
+        raise ValueError("No image provided")
+
+    extracted_text = img2text(image_path)
+    items = parse_items(extracted_text)
+    csv_filename = os.path.join(os.getcwd(), "extracted_items.csv")
+    save_to_csv(items, csv_filename)
+    
+    # Read the CSV file and return its contents as a string
+    with open(csv_filename, 'r') as file:
+        csv_contents = file.read()
+    
+    return csv_contents, csv_filename
+
+# Create Gradio interface
+iface = gr.Interface(
+    fn=process_image,
+    inputs=gr.Image(sources=["upload"], type="filepath"),
+    outputs=["text", "file"]
+)
+
+iface.launch(share=False)
