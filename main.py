@@ -25,35 +25,26 @@ def save_to_csv(items, filename):
         writer.writerow(['Item Name', 'Item Price'])
         writer.writerows(items)
 
-def process_image(upload_image, webcam_image):
-    # Debugging statements to verify inputs
-    print(f"Upload Image: {upload_image}")
-    print(f"Webcam Image: {webcam_image}")
+def process_image(image):
+    # Debugging statement to verify input
+    print(f"Image: {image}")
 
-    # Determine which image is provided
-    if upload_image is not None:
-        image_path = upload_image
-    elif webcam_image is not None:
-        # Convert NumPy array to PIL Image
-        pil_image = Image.fromarray(webcam_image)
+    # Determine the type of image provided
+    if isinstance(image, str):
+        # Image is a file path
+        image_path = image
+    elif isinstance(image, np.ndarray):
+        # Image is a NumPy array (webcam image)
+        pil_image = Image.fromarray(image)
         # Save the image to a temporary file
         temp_image_path = os.path.join(os.getcwd(), "temp_image.png")
         pil_image.save(temp_image_path)
         print(f"Image saved to {temp_image_path}")  # Debugging statement
         image_path = temp_image_path
     else:
-        raise ValueError("No image provided")
+        raise ValueError("Unsupported image type")
 
-    extracted_text = img2text(image_path)
-    items = parse_items(extracted_text)
-    csv_filename = os.path.join(os.getcwd(), "extracted_items.csv")
-    save_to_csv(items, csv_filename)
-    
-    # Read the CSV file and return its contents as a string
-    with open(csv_filename, 'r') as file:
-        csv_contents = file.read()
-    
-    return csv_contents, csv_filename
+    return image_path
 
 # Create Gradio interface
 iface = gr.Interface(
@@ -62,4 +53,4 @@ iface = gr.Interface(
     outputs=["text", "file"]
 )
 
-iface.launch(share=False)
+iface.launch(share=True)
